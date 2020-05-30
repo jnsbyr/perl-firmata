@@ -33,15 +33,14 @@ sub open {
   my ( $pkg, $serial_port, $opts ) = @_;
   my $self = ref $pkg ? $pkg : $pkg->new($opts);
   my $serial_obj = $SERIAL_CLASS->new( $serial_port, 1, 0 ) or return;
-  $self->attach($serial_obj,$opts);
+  $self->attach($serial_obj, $opts);
   $self->{handle}->baudrate($self->{baudrate});
   $self->{handle}->databits(8);
   $self->{handle}->stopbits(1);
   return $self;
 }
 
-
-=head2 attach ( serialPort )
+=head2 attach ( serialPort , [opts] )
 
 Assign a L<Device::SerialPort> (or L<Win32::SerialPort>) as IO port and return a L<Device::Firmata::IO::SerialIO> object. Typically used internally by the C<open()> method.
 
@@ -54,8 +53,7 @@ sub attach {
   return $self;
 }
 
-
-=head2 data_write
+=head2 data_write ( buffer )
 
 Send a bunch of data to the Firmata device. Typically used internally by L<Device::Firmata::Platform>.
 
@@ -68,8 +66,7 @@ sub data_write {
   return $self->{handle}->write( $buf );
 }
 
-
-=head2 data_read
+=head2 data_read ( numBytes )
 
 Fetch up to given number of bytes from the serial port. This function is non-blocking. Returns the received data. Typically used internally by L<Device::Firmata::Platform>.
 
@@ -83,8 +80,7 @@ sub data_read {
   return $string;
 }
 
-
-=head2 close
+=head2 close ( )
 
 Close serial connection to Firmata device.
 
@@ -98,7 +94,6 @@ sub close($) {
     delete $self->{handle};
   }
 }
-
 
 =head1 SEE ALSO
 
