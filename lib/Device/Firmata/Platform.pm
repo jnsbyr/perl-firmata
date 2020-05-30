@@ -60,18 +60,36 @@ use Device::Firmata::Base
   stringresponse              => {},
   };
 
-=head2 open
+=head1 METHODS
 
-Connect to the IO port and do some basic operations
-to find out how to connect to the device
+=head2 attach ( ioPort )
+
+Creates new Firmata Platform instance and attaches the provided I/O port.
+
+=over
+
+=item * param ioPort: either an instance of L<Device::Firmata::IO::SerialIO> or L<DDevice::Firmata::IO::NetIO> or 
+                      of any other class that provides compatible implementations for the methods data_read and data_write
+
+=item * return new Device::Firmata::Platform instance
+
+=back
+
+After attaching the I/O port to the Firmata Platform the following sequence of operations is recommended:
+
+=over
+
+=item * 1. Call L</probe ( )> to request the capabilities of the Firmata device.
+
+=item * 2. Call L</pin_mode ( pin, mode )> to configure the pins of the Firmata device.
+
+=item * Periodically call L</poll ( )> to processess messages from the Firmata device.
+
+=back
 
 =cut
 
-sub attach {
-  # --------------------------------------------------
-  # Attach to an open IO port and do some basic operations
-  # to find out how to connect to the device
-  #
+sub attach ($$;$) {
   my ( $pkg, $port, $opts ) = @_;
   my $self = ref $pkg ? $pkg : $pkg->new($opts);
   $self->{io} = $port or return;
@@ -79,7 +97,14 @@ sub attach {
   return $self;
 }
 
-sub detach {
+=head2 detach ( )
+
+Detach IO port from Firmata Platform.
+Typically used only internally by L</close ( )>.
+
+=cut
+
+sub detach ($) {
   my $self = shift;
   delete $self->{io} if ($self->{io});
   delete $self->{protocol} if ($self->{protocol});
@@ -102,13 +127,25 @@ sub detach {
   $self->{metadata}           = {};
 }
 
-sub close {
+=head2 close ( )
+
+Close IO port and detach from Firmata Platform.
+
+=cut
+
+sub close ($) {
   my $self = shift;
   $self->{io}->close();
   $self->detach();
 }
 
-sub system_reset {
+=head2 system_reset ( )
+
+Try to reset Firmata device. Will only work if Firmata device is connected.
+
+=cut
+
+sub system_reset ($) {
   my $self = shift;
   $self->{io}->data_write($self->{protocol}->message_prepare( SYSTEM_RESET => 0 ));
   $self->{sysex_data}         = [];
@@ -129,15 +166,15 @@ sub system_reset {
   $self->{metadata}           = {};
 }
 
-=head2 messages_handle
+=head2 messages_handle ( messages )
 
-Receive identified message packets and convert them
-into their appropriate structures and parse
-them as required
+Receive identified message packets and convert them into their appropriate 
+structures and parse them as required. 
+Typically used only internally by L</poll ( )>.
 
 =cut
 
-sub messages_handle {
+sub messages_handle ($$) {
   # --------------------------------------------------
   my ( $self, $messages ) = @_;
   return unless $messages;
@@ -223,15 +260,15 @@ sub messages_handle {
   }
 }
 
-=head2 sysex_handle
+=head2 sysex_handle ( sysexMessage)
 
-Receive identified sysex packets and convert them
-into their appropriate structures and parse
-them as required
+Receive identified sysex packets and convert them into their appropriate 
+structures and parse them as required. 
+Typically used only internally by L</messages_handle ( messages )>.
 
 =cut
 
-sub sysex_handle {
+sub sysex_handle ($$) {
   # --------------------------------------------------
   my ( $self, $sysex_message ) = @_;
   my $data = $sysex_message->{data};
@@ -289,11 +326,11 @@ sub sysex_handle {
             push @onewirepins, $pin;
           }
           if ($capabilities->{$pin}->{PIN_STEPPER+0}) {
-          	push @stepperpins, $pin;
+            push @stepperpins, $pin;
             $self->{metadata}{stepper_resolutions}{$pin} = $capabilities->{$pin}->{PIN_STEPPER+0}->{resolution};
           }
           if ($capabilities->{$pin}->{PIN_ENCODER+0}) {
-          	push @encoderpins, $pin;
+            push @encoderpins, $pin;
             $self->{metadata}{encoder_resolutions}{$pin} = $capabilities->{$pin}->{PIN_ENCODER+0}->{resolution};
           }
           if ($capabilities->{$pin}->{PIN_SERIAL+0}) {
@@ -401,7 +438,7 @@ sub sysex_handle {
   }
 }
 
-=head2 probe
+=head2 probe ( )
 
 On device boot time we wait 3 seconds for firmware name
 that the target device is using.
@@ -410,9 +447,15 @@ response another 2 seconds and fire requests for version.
 If the response received, then we store protocol version
 and analog mapping and capability.
 
+=over
+
+=item * return on success, C<undef> on error
+
+=back
+
 =cut
 
-sub probe {
+sub probe ($) {
   # --------------------------------------------------
   my ($self) = @_;
   $self->{metadata}{firmware}         = '';
@@ -445,14 +488,21 @@ sub probe {
   return;
 }
 
-=head2 pin_mode
+=head2 pin_mode ( pin, mode )
 
-Similar to the pinMode function on the
-arduino
+Set mode of Firmata device pin.
+
+=over
+
+=item * parm pin: Firmata device pin
+
+=item * param mode: use a member of constant $BASE from L<Device::Firmata::Constants>
+
+=back
 
 =cut
 
-sub pin_mode {
+sub pin_mode ($$$) {
 
   # --------------------------------------------------
   my ( $self, $pin, $mode ) = @_;
@@ -469,8 +519,10 @@ sub pin_mode {
     };
 
     $mode == PIN_ANALOG and do {
+      my $channel = $self->device_pin_to_analog_channel($pin);
+      die "pin '".$pin."' is not reported as 'ANALOG' channel by Firmata device" unless defined($channel);
       $self->{io}->data_write($self->{protocol}->message_prepare( SET_PIN_MODE => 0, $pin, $mode ));
-      $self->{io}->data_write($self->{protocol}->message_prepare( REPORT_ANALOG => $pin, 1 ));
+      $self->{io}->data_write($self->{protocol}->message_prepare( REPORT_ANALOG => $channel, 1 ));
       last;
     };
 
@@ -480,18 +532,23 @@ sub pin_mode {
   return 1;
 }
 
-=head2 digital_write
+=head2 digital_write ( pin, state )
 
-Analogous to the digitalWrite function on the
-arduino
+=over
 
-Deprecation Warning:
-Writing to pin with mode "INPUT" is only supported for backward compatibility
+=item * parm pin: Firmata device pin
+
+=item * param state: new state (0 or 1) for digial pin to set on Firmata device
+
+=back
+
+Deprecation warning:
+Writing to pin with mode "PIN_INPUT" is only supported for backward compatibility
 to switch pullup on and off. Use sub pin_mode with $mode=PIN_PULLUP instead.
 
 =cut
 
-sub digital_write {
+sub digital_write ($$$) {
 
   # --------------------------------------------------
   my ( $self, $pin, $state ) = @_;
@@ -513,14 +570,19 @@ sub digital_write {
   return 1;
 }
 
-=head2 digital_read
+=head2 digital_read ( pin )
 
-Analogous to the digitalRead function on the
-arduino
+=over
+
+=item * parm pin: Firmata device pin
+
+=item * return last state (0 or 1) of digital pin received from Firmata device
+
+=back
 
 =cut
 
-sub digital_read {
+sub digital_read ($$) {
 
   # --------------------------------------------------
   my ( $self, $pin ) = @_;
@@ -532,95 +594,108 @@ sub digital_read {
   return ( $port_state & $pin_mask ? 1 : 0 );
 }
 
-=head2 analog_read
+=head2 analog_read ( pin )
 
-Fetches the analog value of a pin
+=over
+
+=item * parm pin: Firmata device pin
+
+=item * return last value of analog pin received from Firmata device
+
+=back
 
 =cut
 
-sub analog_read {
+sub analog_read ($$) {
 
   # --------------------------------------------------
-  #
   my ( $self, $pin ) = @_;
   die "pin '".$pin."' is not configured for mode 'ANALOG'" unless $self->is_configured_mode($pin,PIN_ANALOG);
-  return $self->{analog_pins}[$pin];
+  my $channel = $self->device_pin_to_analog_channel($pin);
+  die "pin '".$pin."' is not reported as 'ANALOG' channel by Firmata device" unless defined($channel);
+  return $self->{analog_pins}[$channel];
 }
 
-=head2 analog_write
+=head2 analog_write ( pin, value )
+
+=over
+
+=item * parm pin: Firmata device pin
+
+=item * param state: new value for PWM pin to set on Firmata device
+
+=back
 
 =cut
 
-sub analog_write {
+sub analog_write ($$) {
 
   # --------------------------------------------------
-  # Sets the PWM value on an arduino
-  #
   my ( $self, $pin, $value ) = @_;
   die "pin '".$pin."' is not configured for mode 'PWM'" unless $self->is_configured_mode($pin,PIN_PWM);
-
+  
   # FIXME: 8 -> 7 bit translation should be done in the protocol module
   my $byte_0 = $value & 0x7f;
   my $byte_1 = $value >> 7;
   return $self->{io}->data_write($self->{protocol}->message_prepare( ANALOG_MESSAGE => $pin, $byte_0, $byte_1 ));
 }
 
-=head2 pwm_write
+=head2 pwm_write ( pin, value )
 
-pmw_write is an alias for analog_write
+pmw_write ( pin, value ) is an alias for L</analog_write ( pin, value )>
 
 =cut
 
 *pwm_write = *analog_write;
 
-sub protocol_version_query {
+sub protocol_version_query ($) {
   my $self = shift;
   my $protocol_version_query_packet = $self->{protocol}->packet_query_version;
   return $self->{io}->data_write($protocol_version_query_packet);
 }
 
-sub firmware_version_query {
+sub firmware_version_query ($) {
   my $self = shift;
   my $firmware_version_query_packet = $self->{protocol}->packet_query_firmware;
   return $self->{io}->data_write($firmware_version_query_packet);
 }
 
-sub capability_query {
+sub capability_query ($) {
   my $self = shift;
   my $capability_query_packet = $self->{protocol}->packet_query_capability();
   return $self->{io}->data_write($capability_query_packet);
 }
 
-sub analog_mapping_query {
+sub analog_mapping_query ($) {
   my $self = shift;
   my $analog_mapping_query_packet = $self->{protocol}->packet_query_analog_mapping();
   return $self->{io}->data_write($analog_mapping_query_packet);
 }
 
-sub pin_state_query {
+sub pin_state_query ($$) {
   my ($self,$pin) = @_;
   my $pin_state_query_packet = $self->{protocol}->packet_query_pin_state($pin);
   return $self->{io}->data_write($pin_state_query_packet);
 }
 
-sub sampling_interval {
+sub sampling_interval ($$) {
   my ( $self, $sampling_interval ) = @_;
   my $sampling_interval_packet = $self->{protocol}->packet_sampling_interval($sampling_interval);
   return $self->{io}->data_write($sampling_interval_packet);
 }
 
-sub sysex_send {
+sub sysex_send  ($@) {
   my ( $self, @sysex_data ) = @_;
   my $sysex_packet = $self->{protocol}->packet_sysex(@sysex_data);
   return $self->{io}->data_write($sysex_packet);
 }
 
-sub i2c_write {
+sub i2c_write ($$@) {
   my ($self,$address,@data) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_i2c_request($address,0x0,@data));
 }
 
-sub i2c_readonce {
+sub i2c_readonce ($$$$) {
   my ($self,$address,$register,$numbytes) = @_;
   my $packet = (defined $numbytes)
     ? $self->{protocol}->packet_i2c_request($address,0x8,$register,$numbytes)
@@ -628,25 +703,25 @@ sub i2c_readonce {
   return $self->{io}->data_write($packet);
 }
 
-sub i2c_read {
+sub i2c_read ($$$$) {
   my ($self,$address,$register,$numbytes) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_i2c_request($address,0x10,$register,$numbytes));
 }
 
-sub i2c_stopreading {
+sub i2c_stopreading ($$) {
   my ($self,$address) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_i2c_request($address,0x18));
 }
 
-sub i2c_config {
+sub i2c_config ($$@) {
   my ( $self, $delay, @data ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_i2c_config($delay,@data));
 }
 
-sub servo_write {
+sub servo_write ($$$) {
 
   # --------------------------------------------------
-  # Sets the SERVO value on an arduino
+  # Sets the SERVO value on an Arduino
   #
   my ( $self, $pin, $value ) = @_;
   die "pin '".$pin."' is not configured for mode 'SERVO'" unless $self->is_configured_mode($pin,PIN_SERVO);
@@ -657,13 +732,13 @@ sub servo_write {
   return $self->{io}->data_write($self->{protocol}->message_prepare( ANALOG_MESSAGE => $pin, $byte_0, $byte_1 ));
 }
 
-sub servo_config {
+sub servo_config ($$$) {
   my ( $self, $pin, $args ) = @_;
   die "pin '".$pin."' is not configured for mode 'SERVO'" unless $self->is_configured_mode($pin,PIN_SERVO);
   return $self->{io}->data_write($self->{protocol}->packet_servo_config_request($pin,$args));
 }
 
-sub scheduler_create_task {
+sub scheduler_create_task ($) {
   my $self = shift;
   my $id=-1;
   my $tasks = $self->{tasks};
@@ -682,7 +757,7 @@ sub scheduler_create_task {
   return $id;
 }
 
-sub scheduler_delete_task {
+sub scheduler_delete_task ($$) {
   my ($self,$id) = @_;
   my $tasks = $self->{tasks};
   for my $task (@$tasks) {
@@ -697,7 +772,7 @@ sub scheduler_delete_task {
   }
 }
 
-sub scheduler_add_to_task {
+sub scheduler_add_to_task ($$$) {
   my ($self,$id,$packet) = @_;
   my $tasks = $self->{tasks};
   for my $task (@$tasks) {
@@ -709,7 +784,7 @@ sub scheduler_add_to_task {
   }
 }
 
-sub scheduler_schedule_task {
+sub scheduler_schedule_task ($$$) {
   my ($self,$id,$time_ms) = @_;
   my $tasks = $self->{tasks};
   for my $task (@$tasks) {
@@ -744,20 +819,20 @@ sub scheduler_schedule_task {
   }
 }
 
-sub scheduler_reset {
+sub scheduler_reset ($) {
   my $self = shift;
   my $packet = $self->{protocol}->packet_reset_scheduler;
   $self->{io}->data_write($packet);
   $self->{tasks} = [];
 }
 
-sub scheduler_query_all_tasks {
+sub scheduler_query_all_tasks ($) {
   my $self = shift;
   my $packet = $self->{protocol}->packet_query_all_tasks;
   $self->{io}->data_write($packet);
 }
 
-sub scheduler_query_task {
+sub scheduler_query_task ($$) {
   my ($self,$id) = @_;
   my $packet = $self->{protocol}->packet_query_task($id);
   $self->{io}->data_write($packet);
@@ -775,56 +850,56 @@ sub scheduler_query_task {
 # write => undef | bytes[],
 #}
 
-sub onewire_search {
+sub onewire_search ($$) {
   my ( $self, $pin ) = @_;
   die "pin '".$pin."' is not configured for mode 'ONEWIRE'" unless $self->is_configured_mode($pin,PIN_ONEWIRE);
   return $self->{io}->data_write($self->{protocol}->packet_onewire_search_request( $pin ));
 }
 
-sub onewire_search_alarms {
+sub onewire_search_alarms ($$) {
   my ( $self, $pin ) = @_;
   die "pin '".$pin."' is not configured for mode 'ONEWIRE'" unless $self->is_configured_mode($pin,PIN_ONEWIRE);
   return $self->{io}->data_write($self->{protocol}->packet_onewire_search_alarms_request( $pin ));
 }
 
-sub onewire_config {
+sub onewire_config ($$$) {
   my ( $self, $pin, $power ) = @_;
   die "pin '".$pin."' is not configured for mode 'ONEWIRE'" unless $self->is_configured_mode($pin,PIN_ONEWIRE);
   return $self->{io}->data_write($self->{protocol}->packet_onewire_config_request( $pin, $power ));
 }
 
-sub onewire_reset {
+sub onewire_reset ($$) {
   my ( $self, $pin ) = @_;
   return $self->onewire_command_series( $pin, {reset => 1} );
 }
 
-sub onewire_skip {
+sub onewire_skip ($$) {
   my ( $self, $pin ) = @_;
   return $self->onewire_command_series( $pin, {skip => 1} );
 }
 
-sub onewire_select {
+sub onewire_select ($$$) {
   my ( $self, $pin, $device ) = @_;
   return $self->onewire_command_series( $pin, {select => $device} );
 }
 
-sub onewire_read {
+sub onewire_read ($$$) {
   my ( $self, $pin, $numBytes ) = @_;
   return $self->onewire_command_series( $pin, {read => $numBytes} );
 }
 
-sub onewire_write {
+sub onewire_write ($$@) {
   my ( $self, $pin, @data ) = @_;
   return $self->onewire_command_series( $pin, {write => \@data} );
 }
 
-sub onewire_command_series {
+sub onewire_command_series ($$$) {
   my ( $self, $pin, $args ) = @_;
   die "pin '".$pin."' is not configured for mode 'ONEWIRE'" unless $self->is_configured_mode($pin,PIN_ONEWIRE);
   return $self->{io}->data_write($self->{protocol}->packet_onewire_request( $pin, $args ));
 }
 
-sub stepper_config {
+sub stepper_config ($$$$$$$$) {
   my ( $self, $stepperNum, $interface, $stepsPerRev, $directionPin, $stepPin, $motorPin3, $motorPin4 ) = @_;
   die "unsupported mode 'STEPPER' for pin '".$directionPin."'" unless $self->is_supported_mode($directionPin,PIN_STEPPER);
   die "unsupported mode 'STEPPER' for pin '".$stepPin."'" unless $self->is_supported_mode($stepPin,PIN_STEPPER);
@@ -833,49 +908,49 @@ sub stepper_config {
   return $self->{io}->data_write($self->{protocol}->packet_stepper_config( $stepperNum, $interface, $stepsPerRev, $directionPin, $stepPin, $motorPin3, $motorPin4 ));
 }
 
-sub stepper_step {
+sub stepper_step ($$$$$$$) {
   my ( $self, $stepperNum, $direction, $numSteps, $stepSpeed, $accel, $decel ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_stepper_step( $stepperNum, $direction, $numSteps, $stepSpeed, $accel, $decel ));
 }
 
-sub encoder_attach {
+sub encoder_attach ($$$$) {
   my ( $self, $encoderNum, $pinA, $pinB ) = @_;
   die "unsupported mode 'ENCODER' for pin '".$pinA."'" unless $self->is_supported_mode($pinA,PIN_ENCODER);
   die "unsupported mode 'ENCODER' for pin '".$pinB."'" unless $self->is_supported_mode($pinB,PIN_ENCODER);
   return $self->{io}->data_write($self->{protocol}->packet_encoder_attach( $encoderNum, $pinA, $pinB ));
 }
 
-sub encoder_report_position {
+sub encoder_report_position ($$) {
   my ( $self, $encoderNum ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_encoder_report_position( $encoderNum ));
 }
 
-sub encoder_report_positions {
+sub encoder_report_positions ($) {
   my ( $self ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_encoder_report_positions());
 }
 
-sub encoder_reset_position {
+sub encoder_reset_position ($$) {
   my ( $self, $encoderNum ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_encoder_reset_position( $encoderNum ));
 }
 
-sub encoder_report_auto {
+sub encoder_report_auto ($$) {
   my ( $self, $enable ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_encoder_report_auto( $enable ));
 }
 
-sub encoder_detach {
+sub encoder_detach ($$) {
   my ( $self, $encoderNum ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_encoder_detach( $encoderNum ));
 }
 
-sub serial_write {
+sub serial_write ($$@) {
   my ( $self, $port, @data ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_serial_write( $port, @data ));
 }
 
-sub serial_read {
+sub serial_read ($$$) {
   my ( $self, $port, $numbytes ) = @_;
   if ($port >= 8) {
     $self->{io}->data_write($self->{protocol}->packet_serial_listen( $port ));
@@ -883,25 +958,25 @@ sub serial_read {
   return $self->{io}->data_write($self->{protocol}->packet_serial_read( $port, 0x00, $numbytes ));
 }
 
-sub serial_stopreading {
+sub serial_stopreading ($$) {
   my ( $self, $port) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_serial_read( $port, 0x01, 0 ));
 }
 
-sub serial_config {
+sub serial_config ($$$$$) {
   my ( $self, $port, $baud, $rxPin, $txPin ) = @_;
   return $self->{io}->data_write($self->{protocol}->packet_serial_config( $port, $baud, $rxPin, $txPin ));
 }
 
-=head2 poll
+=head2 poll ( )
 
 Call this function every once in a while to
 check up on the status of the comm port, receive
-and process data from the arduino
+and process data from the Firmata device
 
 =cut
 
-sub poll {
+sub poll ($) {
 
   # --------------------------------------------------
   my $self     = shift;
@@ -911,7 +986,24 @@ sub poll {
   return $messages;
 }
 
-sub observe_digital {
+=head2 observe_digital ( pin, observer, context )
+
+Register callback sub that will be called by L</messages_handle ( messages )> 
+if a new value for a digital pin was received from the Firmata device.
+
+=over
+
+=item * parm pin: Firmata device pin
+
+=item * parm observer: callback sub reference with the parameters pin, oldState, newState, context
+
+=item * parm context: context value passed as last parameter to callback sub
+
+=back
+
+=cut
+
+sub observe_digital ($$$;$) {
   my ( $self, $pin, $observer, $context ) = @_;
   die "unsupported mode 'INPUT' for pin '".$pin."'" unless ($self->is_supported_mode($pin,PIN_INPUT));
   $self->{digital_observer}[$pin] = {
@@ -923,18 +1015,37 @@ sub observe_digital {
   return 1;
 }
 
-sub observe_analog {
+=head2 observe_analog ( pin, observer, context )
+
+Register callback sub that will be called by L</messages_handle ( messages )> 
+if the value of the analog pin received from the Firmata device has changed.
+
+=over
+
+=item * parm pin: Firmata device pin
+
+=item * parm observer: callback sub reference with the parameters pin, oldValue, newValue, context
+
+=item * parm context: context value passed as last parameter to callback sub
+
+=back
+
+=cut
+
+sub observe_analog ($$$;$) {
   my ( $self, $pin, $observer, $context ) = @_;
-  die "unsupported mode 'ANALOG' for pin '".$pin."'" unless ($self->is_supported_mode($pin,PIN_ANALOG));
+  die "pin '".$pin."' is not configured for mode 'ANALOG'" unless $self->is_configured_mode($pin,PIN_ANALOG);
   $self->{analog_observer}[$pin] =  {
       method  => $observer,
       context => $context,
     };
-  $self->{io}->data_write($self->{protocol}->message_prepare( REPORT_ANALOG => $pin, 1 ));
+  my $channel = $self->device_pin_to_analog_channel($pin);
+  die "pin '".$pin."' is not reported as 'ANALOG' channel by Firmata device" unless defined($channel);
+  $self->{io}->data_write($self->{protocol}->message_prepare( REPORT_ANALOG => $channel, 1 ));
   return 1;
 }
 
-sub observe_sysex {
+sub observe_sysex ($$;$) {
   my ( $self, $observer, $context ) = @_;
   $self->{sysex_observer} = {
       method  => $observer,
@@ -943,7 +1054,7 @@ sub observe_sysex {
   return 1;
 }
 
-sub observe_i2c {
+sub observe_i2c ($$;$) {
   my ( $self, $observer, $context ) = @_;
   return undef if (defined $self->{metadata}->{i2cpins} && @$self->{metadata}->{i2cpins} == 0 );
   $self->{i2c_observer} =  {
@@ -953,7 +1064,7 @@ sub observe_i2c {
   return 1;
 }
 
-sub observe_onewire {
+sub observe_onewire ($$$;$) {
   my ( $self, $pin, $observer, $context ) = @_;
   die "unsupported mode 'ONEWIRE' for pin '".$pin."'" unless ($self->is_supported_mode($pin,PIN_ONEWIRE));
   $self->{onewire_observer}[$pin] =  {
@@ -963,7 +1074,7 @@ sub observe_onewire {
   return 1;
 }
 
-sub observe_stepper {
+sub observe_stepper ($$$;$) {
   my ( $self, $stepperNum, $observer, $context ) = @_;
 #TODO validation?  die "unsupported mode 'STEPPER' for pin '".$pin."'" unless ($self->is_supported_mode($pin,PIN_STEPPER));
   $self->{stepper_observer}[$stepperNum] = {
@@ -973,7 +1084,7 @@ sub observe_stepper {
   return 1;
 }
 
-sub observe_encoder {
+sub observe_encoder ($$$;$) {
   my ( $self, $encoderNum, $observer, $context ) = @_;
 #TODO validation?  die "unsupported mode 'ENCODER' for pin '".$pin."'" unless ($self->is_supported_mode($pin,PIN_ENCODER));
   $self->{encoder_observer}[$encoderNum] = {
@@ -983,7 +1094,7 @@ sub observe_encoder {
   return 1;
 }
 
-sub observe_serial {
+sub observe_serial ($$$;$) {
   my ( $self, $port, $observer, $context ) = @_;
   return undef if (defined $self->{metadata}->{serialpins} && @$self->{metadata}->{serialpins} == 0 );
   $self->{serial_observer}[$port] =  {
@@ -993,7 +1104,7 @@ sub observe_serial {
   return 1;
 }
 
-sub observe_scheduler {
+sub observe_scheduler ($$;$) {
   my ( $self, $observer, $context ) = @_;
   $self->{scheduler_observer} = {
       method  => $observer,
@@ -1002,7 +1113,7 @@ sub observe_scheduler {
   return 1;
 }
 
-sub observe_string {
+sub observe_string ($$;$) {
   my ( $self, $observer, $context ) = @_;
   $self->{string_observer} = {
       method  => $observer,
@@ -1011,13 +1122,59 @@ sub observe_string {
   return 1;
 }
 
-sub is_supported_mode {
+sub is_supported_mode ($$$) {
   my ($self,$pin,$mode) = @_;
   return undef if (defined $self->{metadata}->{capabilities} and (!(defined $self->{metadata}->{capabilities}->{$pin}) or !(defined $self->{metadata}->{capabilities}->{$pin}->{$mode})));
   return 1;
 }
 
-sub is_configured_mode {
+=head2 device_pin_to_analog_channel ( pin )
+
+=over
+
+=item * parm pin: Firmata device pin
+
+=item * return analog channel number if analog mapping is available (e.g. by calling L</probe ( )>), 
+               C<undef> if given pin is not mapped as an analog channel or 
+               given pin if analog mapping is not available
+
+=back
+
+=cut
+
+sub device_pin_to_analog_channel ($$) {
+  my ($self,$pin) = @_;
+  
+  if (defined $self->{metadata}{analog_mappings}) {
+    my $analog_mappings = $self->{metadata}{analog_mappings};
+    foreach my $channel (keys %$analog_mappings) {
+      if ($analog_mappings->{$channel} == $pin) {
+        return $channel;
+      }
+    }
+    return undef;
+  }
+
+  return $pin;  
+}  
+
+=head2 is_configured_mode ( pin, mode )
+
+Verify if pin was configured with L</pin_mode ( pin, mode )> for requested mode.
+
+=over
+
+=item * parm pin: Firmata device pin
+
+=item * param mode: use a member of constant $BASE from L<Device::Firmata::Constants>
+
+=item * return 1 on success or C<undef> on error
+
+=back
+
+=cut
+
+sub is_configured_mode ($$$) {
   my ($self,$pin,$mode) = @_;
   return undef if (!defined $self->{pin_modes}->{$pin} or $self->{pin_modes}->{$pin} != $mode);
   return 1;

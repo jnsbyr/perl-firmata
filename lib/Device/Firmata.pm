@@ -17,11 +17,11 @@ This module allows a computer running Perl to connect to Firmata devices (Arduin
 
 =head1 VERSION
 
-Version 0.65
+Version 0.66
 
 =cut
 
-our $VERSION = '0.65';
+our $VERSION = '0.66';
 our $DEBUG = 0;
 
 
@@ -56,7 +56,7 @@ Establish a serial connection with a Firmata device. The first parameter is the 
 
 =cut
 
-sub open {
+sub open ($$;$) {
 # --------------------------------------------------
 # Establish a connection to Arduino via the serial port
 #
@@ -76,13 +76,13 @@ sub open {
   return $platform;
 }
 
-=head2 listen ( host, port )
+=head2 listen ( host, port, [opts] )
 
 Start a TCP server bound to given local address and port for the Arduino to connect to. Returns a L<Device::Firmata::IO::NetIO> object. An implementation example can be found in file F<examples/example-tcpserver.pl>.
 
 =cut
 
-sub listen {
+sub listen ($$$;$) {  
 # --------------------------------------------------
 # Listen on socket and wait for Arduino to establish a connection
 #
@@ -100,7 +100,7 @@ In the folder F<examples> you will find more than 15 implementation examples for
 
 =head1 SEE ALSO
 
-L<Device::Firmata::Base>
+L<Device::Firmata::Platform>
 
 =head1 LICENSE
 
