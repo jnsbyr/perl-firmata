@@ -56,7 +56,7 @@ Establish a serial connection with a Firmata device. The first parameter is the 
 
 =cut
 
-sub open ($$;$) {
+sub open {
 # --------------------------------------------------
 # Establish a connection to Arduino via the serial port
 #
@@ -82,7 +82,7 @@ Start a TCP server bound to given local address and port for the Arduino to conn
 
 =cut
 
-sub listen ($$$;$) {  
+sub listen {
 # --------------------------------------------------
 # Listen on socket and wait for Arduino to establish a connection
 #

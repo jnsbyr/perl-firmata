@@ -86,7 +86,7 @@ Close serial connection to Firmata device.
 
 =cut
 
-sub close($) {
+sub close {
 # --------------------------------------------------
   my ( $self ) = @_;
   if ($self->{handle}) {
