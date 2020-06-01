@@ -2,7 +2,7 @@ package Device::Firmata::IO::SerialIO;
 
 =head1 NAME
 
-Device::Firmata::IO::SerialIO - implement the low level serial IO.
+Device::Firmata::IO::SerialIO - serial port interface to Firmata device
 
 =cut
 
@@ -21,10 +21,11 @@ $SERIAL_CLASS = $^O eq 'MSWin32' ? 'Win32::SerialPort'
                                  : 'Device::SerialPort';
 eval "require $SERIAL_CLASS";
 
+=head1 METHODS
 
 =head2 open ( serialPort , [opts] )
 
-Establish a serial connection with a Firmata device. The first parameter is the name of the serial device connected with the Firmata device, e.g. '/dev/ttyUSB0' or 'COM9'. The second parameter is  an optional hash of parameters for the serial port. The parameter C<baudrate> is supported and defaults to C<57600>. Returns a C<Device::Firmata::IO::SerialIO> object. Typically called internally by the C<open> method of L<Device::Firmata>.
+Establish a serial connection with a Firmata device. The first parameter is the name of the serial device connected with the Firmata device, e.g. '/dev/ttyUSB0' or 'COM9'. The second parameter is  an optional hash of parameters for the serial port. The parameter C<baudrate> is supported and defaults to C<57600>. Returns a L<Device::Firmata::IO::SerialIO> object. Typically called internally by L<Device::Firmata/open ( serialPort , [opts] )>.
 
 =cut
 
@@ -42,7 +43,7 @@ sub open {
 
 =head2 attach ( serialPort , [opts] )
 
-Assign a L<Device::SerialPort> (or L<Win32::SerialPort>) as IO port and return a L<Device::Firmata::IO::SerialIO> object. Typically used internally by the C<open()> method.
+Assign a L<Device::SerialPort> (or L<Win32::SerialPort>) as IO port and return a L<Device::Firmata::IO::SerialIO> object. Typically used internally by L<open ( serialPort , [opts] )> method.
 
 =cut
 
@@ -97,7 +98,7 @@ sub close {
 
 =head1 SEE ALSO
 
-L<Device::Firmata::Base>
+L<Device::Firmata::Platform/attach ( ioPort )>
 
 =cut
 

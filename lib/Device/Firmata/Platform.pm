@@ -2,7 +2,36 @@ package Device::Firmata::Platform;
 
 =head1 NAME
 
-Device::Firmata::Platform - Platform specifics
+Device::Firmata::Platform - Firmata API
+
+=head1 DESCRIPTION
+
+Provides the application programming interface for Device::Firmata
+implementing all major features of the Firmata 2.5 specification:
+
+=over
+
+=item * Analog Firmata
+
+=item * Digital Firmata
+
+=item * I2C Firmata
+
+=item * 1-Wire Firmata
+
+=item * Serial Firmata
+
+=item * Servo Firmata
+
+=item * Stepper Firmata
+
+=item * Firmata Scheduler
+
+=back
+
+This API documentation is currently incomplete and only covers a small
+subset of the implementation. Anyone willing to help improve the
+documentation is welcome.
 
 =cut
 
@@ -61,37 +90,6 @@ use Device::Firmata::Base
   };
 
 =head1 METHODS
-
-The methods of Device::Firmata::Platform together with
-L<Device::Firmata::Constants> provide the main application programming
-interface for Device::Firmata.
-
-Device::Firmata::Platform implements all major features of the Firmata 2.5
-specification:
-
-=over
-
-=item * Analog Firmata
-
-=item * Digital Firmata
-
-=item * I2C Firmata
-
-=item * 1-Wire Firmata
-
-=item * Serial Firmata
-
-=item * Servo Firmata
-
-=item * Stepper Firmata
-
-=item * Firmata Scheduler
-
-=back
-
-This API documentation is currently incomplete and only covers a small
-subset of the implementation. Anyone willing to help improve the
-documentation is welcome.
 
 =head2 attach ( ioPort )
 
@@ -1212,5 +1210,11 @@ sub is_configured_mode {
   return undef if (!defined $self->{pin_modes}->{$pin} or $self->{pin_modes}->{$pin} != $mode);
   return 1;
 }
+
+=head1 SEE ALSO
+
+L<Device::Firmata::Constants>
+
+=cut
 
 1;

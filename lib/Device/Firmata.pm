@@ -11,17 +11,19 @@ use Device::Firmata::Base
 
 =head1 NAME
 
-Device::Firmata - A Perl implementation of the Firmata protocol.
+Device::Firmata - module for controlling Firmata devices
+
+=head1 DESCRIPTION
 
 This module allows a computer running Perl to connect to Firmata devices (Arduinos and compatible, including ESP8266), either via serial I/O (RS-232, USB, etc.) or TCP/IP (LAN, WiFi). Protocol details can be found at L<https://github.com/firmata/protocol>.
 
 =head1 VERSION
 
-Version 0.66
+Version 0.69
 
 =cut
 
-our $VERSION = '0.66';
+our $VERSION = '0.69';
 our $DEBUG = 0;
 
 
